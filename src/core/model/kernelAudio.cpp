@@ -28,6 +28,15 @@
 
 namespace giada::m::model
 {
+void KernelAudio::reset()
+{
+	Shared* const preserved = shared;
+	*this                   = {};
+	shared                  = preserved;
+}
+
+/* -------------------------------------------------------------------------- */
+
 void KernelAudio::a_setCpuLoad(double v) const
 {
 	shared->cpuLoad.store(v);

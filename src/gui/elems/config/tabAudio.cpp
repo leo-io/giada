@@ -337,6 +337,7 @@ void geTabAudio::rebuild(const c::config::AudioData& data)
 
 	activateAll();
 
+	m_api->clear();
 	for (const auto& [key, value] : m_data.availableApis)
 		m_api->addItem(value.c_str(), key);
 	m_api->showItem(m_data.selectedApi);
@@ -350,11 +351,16 @@ void geTabAudio::rebuild(const c::config::AudioData& data)
 		m_numOutChannels->deactivate();
 
 	m_sounddevOut->rebuild(m_data.availableOutputDevices);
-	m_sounddevOut->showItem(m_data.selectedOutputDevice.id);
+	if (m_sounddevOut->hasItem(m_data.selectedOutputDevice.id))
+		m_sounddevOut->showItem(m_data.selectedOutputDevice.id);
+	else
+		m_sounddevOut->showFirstItem();
 
 	m_sounddevIn->rebuild(m_data.availableInputDevices);
-	if (m_data.selectedInputDevice.id != 0)
+	if (m_data.selectedInputDevice.id != 0 && m_sounddevIn->hasItem(m_data.selectedInputDevice.id))
 		m_sounddevIn->showItem(m_data.selectedInputDevice.id);
+	else
+		m_sounddevIn->showFirstItem();
 
 	m_enableIn->value(m_data.selectedInputDevice.id != 0);
 

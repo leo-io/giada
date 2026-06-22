@@ -48,6 +48,13 @@ public:
 		int channelsStart = 0;
 	};
 
+	/* reset
+	Resets all configuration fields to their defaults while preserving the
+	internal 'shared' wiring (which is owned by Model and must outlive any
+	API/device change). */
+
+	void reset();
+
 	void   a_setCpuLoad(double) const;
 	double a_getCpuLoad() const;
 
