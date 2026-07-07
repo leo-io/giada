@@ -37,6 +37,7 @@
 #include "src/utils/log.h"
 #include <FL/Fl.H>
 #include <FL/Fl_Tooltip.H>
+#include <FL/fl_draw.H>
 #include <juce_events/juce_events.h>
 #if G_OS_LINUX || G_OS_FREEBSD
 #include <X11/Xlib.h> // For XInitThreads
@@ -103,6 +104,12 @@ void Ui::load(const m::Patch& patch)
 void Ui::init(const m::Conf& conf, bool isAudioReady)
 {
 	model.load(conf);
+
+	/* Text can be measured while widgets are being constructed, before their
+	draw() methods have selected a font. Initialize FLTK's font descriptor here
+	so those early measurements are safe. */
+
+	fl_font(FL_HELVETICA, G_GUI_FONT_SIZE_BASE);
 
 	/* This is of paramount importance on Linux with VST enabled, otherwise many
 	plug-ins go nuts and crash hard. It seems that some plug-ins on our Juce-based
