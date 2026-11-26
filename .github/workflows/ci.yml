@@ -12,17 +12,28 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Download repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Install dependencies
         run: bash ./.github/scripts/linux/install-deps.sh
 
+      - name: Setup vcpkg binary caching
+        shell: bash
+        run: bash ./.github/scripts/setup-vcpkg-cache.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate Makefile
         run: cmake -S . -B build/ -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Debug -DWITH_TESTS=ON -DWITH_VST3=ON
 
       - name: Build
+        # NOTE: Linux is intentionally NOT using --parallel here unlike Windows
+        # and macOS. Building with full (4-core) parallelism was tested and
+        # caused the compiler to be killed mid-build (SIGTERM) on ubuntu-24.04
+        # runner, almost certainly due to an out-of-memory error.
+        # Let's keep -j 3 unless runner specs change or memory usage is reduced.
         run: cmake --build build/ -j 3
 
       - name: Run tests
@@ -35,9 +46,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Download repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
+
+      - name: Setup vcpkg binary caching
+        shell: bash
+        run: bash ./.github/scripts/setup-vcpkg-cache.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Makefile
         shell: bash
@@ -45,7 +62,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: cmake --build build/ --config Debug -j 3
+        run: cmake --build build/ --config Debug --parallel
 
       - name: Run tests
         run: ./build/Debug/giada.exe --run-tests
@@ -57,15 +74,21 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Download repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
+
+      - name: Setup vcpkg binary caching
+        shell: bash
+        run: bash ./.github/scripts/setup-vcpkg-cache.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Makefile
         run: cmake -S . -B build/ -G "Xcode" -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DCMAKE_CXX_FLAGS="-x objective-c++" -DWITH_TESTS=ON -DWITH_VST3=ON
 
       - name: Build
-        run: cmake --build build/ --config Debug -j 2
+        run: cmake --build build/ --config Debug --parallel
 
       - name: Run tests
         run: ./build/Debug/giada --run-tests

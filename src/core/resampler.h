@@ -30,6 +30,11 @@
 #include <cstddef>
 #include <samplerate.h>
 
+namespace mcl
+{
+class AudioBuffer;
+}
+
 namespace giada::m
 {
 class Resampler final
@@ -50,23 +55,28 @@ public:
 
 	struct Result
 	{
-		long used, generated;
+		std::size_t used      = 0;
+		std::size_t generated = 0;
 	};
 
 	Resampler(); // Invalid
-	Resampler(Quality quality, int channels);
+	Resampler(Quality quality);
 	Resampler(const Resampler& o)          = delete;
 	Resampler(Resampler&&)                 = delete;
 	Resampler& operator=(const Resampler&) = delete;
 	Resampler& operator=(Resampler&&)      = delete;
-	~Resampler();
 
 	/* process
-	Resamples a certain amount of frames from 'input' starting at 'inputPos' and
-	puts the result into 'output'. */
+	Resamples a stereo buffer's [inputStart, inputEnd) range into 'output',
+	starting at 'outputStart', using the given ratio. */
 
-	Result process(float* input, long inputPos, long inputLength, float* output,
-	    long outputLength, float ratio) const;
+	Result process(
+	    const mcl::AudioBuffer& input,
+	    std::size_t             inputStart,
+	    std::size_t             inputEnd,
+	    mcl::AudioBuffer&       output,
+	    std::size_t             outputStart,
+	    float                   ratio) const;
 
 	/* last
 	Call this when you are about to process the last chunk of data. */
@@ -74,23 +84,62 @@ public:
 	void last() const;
 
 private:
-	static long callback(void* self, float** audio);
-	long        callback(float** audio);
+	/* MonoResampler
+	A thin *mono* wrapper around libsamplerate. This class resamples a single
+	channel only: it expects one contiguous mono input buffer and writes one
+	contiguous mono output buffer. All positions and lengths are expressed in
+	frames, not samples. It is intended to be used internally by the stereo
+	Resampler class, with one MonoResampler instance per channel. */
 
-	void alloc(Quality quality, int channels);
+	class MonoResampler
+	{
+	public:
+		MonoResampler(); // Invalid
+		MonoResampler(Quality quality);
+		MonoResampler(const Resampler& o)          = delete;
+		MonoResampler(Resampler&&)                 = delete;
+		MonoResampler& operator=(const Resampler&) = delete;
+		MonoResampler& operator=(Resampler&&)      = delete;
+		~MonoResampler();
 
-	/* CHUNK_LEN
-	How many chunks of data to read from input in the callback. */
+		/* process
+		Resamples a certain amount of frames from 'input' starting at 'inputPos' and
+		puts the result into 'output'. */
 
-	static constexpr int CHUNK_LEN = 256;
+		Result process(
+		    const float* input,
+		    std::size_t  inputPos,
+		    std::size_t  inputLength,
+		    float*       output,
+		    std::size_t  outputLength,
+		    float        ratio) const;
 
-	SRC_STATE*     m_state;
-	Quality        m_quality;
-	mutable float* m_input;       // Pointer to input data
-	mutable long   m_inputPos;    // Where to read from input
-	mutable long   m_inputLength; // Total number of frames in input data
-	int            m_channels;    // Number of channels
-	mutable long   m_usedFrames;  // How many frames have been read from input with a process() call
+		/* last
+		Call this when you are about to process the last chunk of data. */
+
+		void last() const;
+
+		void alloc(Quality quality);
+
+	private:
+		static long callback(void* self, float** audio);
+		long        callback(float** audio);
+
+		/* CHUNK_LEN
+		How many chunks of data to read from input in the callback. */
+
+		static constexpr int CHUNK_LEN = 256;
+
+		SRC_STATE*          m_state;
+		Quality             m_quality;
+		mutable float*      m_input;       // Pointer to input data
+		mutable std::size_t m_inputPos;    // Where to read from input
+		mutable std::size_t m_inputLength; // Total number of frames in input data
+		mutable std::size_t m_usedFrames;  // How many frames have been read from input with a process() call
+	};
+
+	MonoResampler m_left;
+	MonoResampler m_right;
 };
 } // namespace giada::m
 

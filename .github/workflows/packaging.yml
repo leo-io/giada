@@ -13,19 +13,16 @@ jobs:
   create-release:
     name: Create release
     runs-on: ubuntu-24.04
-    outputs: # Output contains the upload url. Will be reused on upload release
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Create
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           draft: true
           prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Windows --------------------------------------------------------------------
   windows:
@@ -35,31 +32,30 @@ jobs:
     needs: create-release
     steps:
       - name: Download repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Generate Makefile
         shell: bash
-        run: cmake -S . -B build/ -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DWITH_VST3=ON
+        run: cmake -S . -B build/ -G "Visual Studio 17 2022" -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows -DWITH_VST3=ON
 
       - name: Build
         shell: bash
-        run: cmake --build build/ --config Release -j 3
+        run: cmake --build build/ --config Release --parallel
 
       - name: Make package
         run: bash ./.github/scripts/windows/make-package.sh ${{ github.ref_name }}
 
       - name: Upload release
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          prerelease: false
+          tag_name: ${{ github.ref_name }}
+          files: dist/giada-${{ github.ref_name }}-x86_64-windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: dist/giada-${{ github.ref_name }}-x86_64-windows.zip
-          asset_name: giada-${{ github.ref_name }}-x86_64-windows.zip
-          asset_content_type: application/zip
 
   # macOS ----------------------------------------------------------------------
   macos:
@@ -69,7 +65,7 @@ jobs:
     needs: create-release
     steps:
       - name: Download repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
@@ -77,21 +73,20 @@ jobs:
         run: cmake -S . -B build/ -G "Xcode" -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DCMAKE_CXX_FLAGS="-x objective-c++" -DWITH_VST3=ON
 
       - name: Build
-        run: cmake --build build/ --config Release -j 3
+        run: cmake --build build/ --config Release --parallel
 
       - name: Make package
         run: bash ./.github/scripts/macos/make-package.sh ${{ github.ref_name }}
 
       - name: Upload release
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          prerelease: false
+          tag_name: ${{ github.ref_name }}
+          files: dist/giada-${{ github.ref_name }}-arm64-macos.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: dist/giada-${{ github.ref_name }}-arm64-macos.zip
-          asset_name: giada-${{ github.ref_name }}-arm64-macos.zip
-          asset_content_type: application/zip
 
   # source ---------------------------------------------------------------------
   source:
@@ -102,18 +97,17 @@ jobs:
     if: github.ref_type == 'tag' # This job needs a tag for the make-src.py script
     steps:
       - name: Download repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Make source package
         run: python3 ./.github/scripts/make-src.py ${{ github.ref_name }}
 
       - name: Upload release
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          prerelease: false
+          tag_name: ${{ github.ref_name }}
+          files: dist/giada-${{ github.ref_name }}-src.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: dist/giada-${{ github.ref_name }}-src.tar.gz
-          asset_name: giada-${{ github.ref_name }}-src.tar.gz
-          asset_content_type: application/gzip

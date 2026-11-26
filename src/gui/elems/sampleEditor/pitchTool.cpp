@@ -30,9 +30,10 @@
 #include "src/glue/channel.h"
 #include "src/gui/dialogs/sampleEditor.h"
 #include "src/gui/elems/basics/box.h"
-#include "src/gui/elems/basics/dial.h"
-#include "src/gui/elems/basics/imageButton.h"
+#include "src/gui/elems/basics/choice.h"
+#include "src/gui/elems/basics/divider.h"
 #include "src/gui/elems/basics/input.h"
+#include "src/gui/elems/basics/menu.h"
 #include "src/gui/elems/basics/textButton.h"
 #include "src/gui/graphics.h"
 #include "src/gui/ui.h"
@@ -45,87 +46,142 @@ namespace utils = mcl::utils;
 
 namespace giada::v
 {
+namespace
+{
+enum class AdjustMenu
+{
+	SPREAD_TO_BAR = 1,
+	SPREAD_TO_SONG,
+	INCREASE_SEMITONE,
+	DECREASE_SEMITONE,
+	RESET_ALL
+};
+} // namespace
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
 gePitchTool::gePitchTool(const c::sampleEditor::Data& d)
 : geFlex(Direction::HORIZONTAL, G_GUI_INNER_MARGIN)
-, m_data(nullptr)
+, m_data(d)
 {
-	m_label       = new geBox(g_ui->getI18Text(LangMap::SAMPLEEDITOR_PITCH), FL_ALIGN_LEFT);
-	m_dial        = new geDial();
-	m_input       = new geInput();
-	m_pitchToBar  = new geTextButton(g_ui->getI18Text(LangMap::SAMPLEEDITOR_PITCH_TOBAR));
-	m_pitchToSong = new geTextButton(g_ui->getI18Text(LangMap::SAMPLEEDITOR_PITCH_TOSONG));
-	m_pitchHalf   = new geImageButton(graphics::divideOff, graphics::divideOn);
-	m_pitchDouble = new geImageButton(graphics::multiplyOff, graphics::multiplyOn);
-	m_pitchReset  = new geTextButton(g_ui->getI18Text(LangMap::COMMON_RESET));
-	addWidget(m_label, 50);
-	addWidget(m_dial, G_GUI_UNIT);
-	addWidget(m_input, 70);
-	addWidget(m_pitchToBar, 70);
-	addWidget(m_pitchToSong, 70);
-	addWidget(m_pitchHalf, G_GUI_UNIT);
-	addWidget(m_pitchDouble, G_GUI_UNIT);
-	addWidget(m_pitchReset, 70);
+	m_playbackModeLabel = new geBox("Mode", FL_ALIGN_CENTER);
+	m_playbackMode      = new geChoice();
+	m_pitchLabel        = new geBox(g_ui->getI18Text(LangMap::SAMPLEEDITOR_PITCH), FL_ALIGN_CENTER);
+	m_pitch             = new geInput();
+	m_timeLabel         = new geBox("Time", FL_ALIGN_CENTER);
+	m_time              = new geInput();
+	m_adjust            = new geTextButton("Adjust...");
+
+	addWidget(m_playbackModeLabel, 50);
+	addWidget(m_playbackMode, 70);
+	addWidget(m_pitchLabel, 50);
+	addWidget(m_pitch, 70);
+	addWidget(m_timeLabel, 50);
+	addWidget(m_time, 70);
+	addWidget(new geBox(), G_GUI_INNER_MARGIN);
+	addWidget(new geDivider(G_COLOR_GREY_3), 1);
+	addWidget(new geBox(), G_GUI_INNER_MARGIN);
+	addWidget(m_adjust, 70);
+
 	end();
 
-	m_dial->range(0.01f, 4.0f);
-	m_dial->when(FL_WHEN_RELEASE);
-	m_dial->onChange = [this](float val)
+	m_pitch->setType(FL_FLOAT_INPUT);
+	m_pitch->setWhen(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY); // on focus lost or enter key
+	m_pitch->onChange = [this](const std::string& val)
 	{
-		c::channel::setChannelPitch(m_data->channelId, val, Thread::MAIN);
+		c::channel::setChannelPitch(m_data.channelId, utils::string::toFloat(val), Thread::MAIN);
 	};
 
-	m_input->setType(FL_FLOAT_INPUT);
-	m_input->setWhen(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY); // on focus lost or enter key
-	m_input->onChange = [this](const std::string& val)
+	m_adjust->onClick = [this]()
 	{
-		c::channel::setChannelPitch(m_data->channelId, utils::string::toFloat(val), Thread::MAIN);
+		geMenu menu;
+		menu.addItem(ID{AdjustMenu::SPREAD_TO_BAR}, "Spread sample to bar");
+		menu.addItem(ID{AdjustMenu::SPREAD_TO_SONG}, "Spread sample to song");
+		menu.addItem(ID{AdjustMenu::INCREASE_SEMITONE}, "+1 Semitone");
+		menu.addItem(ID{AdjustMenu::DECREASE_SEMITONE}, "−1 Semitone");
+		menu.addItem(ID{AdjustMenu::RESET_ALL}, "Reset all");
+
+		menu.onSelect = [this](ID id)
+		{
+			if (id == AdjustMenu::SPREAD_TO_BAR)
+				spreadSampleToLength(m_data.getFramesInBar());
+			else if (id == AdjustMenu::SPREAD_TO_SONG)
+				spreadSampleToLength(m_data.getFramesInLoop());
+			else if (id == AdjustMenu::INCREASE_SEMITONE)
+				c::channel::increasePitchBySemitone(m_data.channelId);
+			else if (id == AdjustMenu::DECREASE_SEMITONE)
+				c::channel::decreasePitchBySemitone(m_data.channelId);
+			else if (id == AdjustMenu::RESET_ALL)
+			{
+				c::channel::setChannelPitch(m_data.channelId, G_DEFAULT_PITCH, Thread::MAIN);
+				c::channel::setChannelTime(m_data.channelId, G_DEFAULT_TIME);
+			}
+		};
+
+		menu.popup();
 	};
 
-	m_pitchToBar->onClick = [this]()
+	m_playbackMode->addItem("Tape", static_cast<int>(PlaybackMode::TAPE));
+	m_playbackMode->addItem("Elastic", static_cast<int>(PlaybackMode::ELASTIC));
+	m_playbackMode->onChange = [this](int id)
 	{
-		c::channel::setChannelPitch(m_data->channelId, m_data->sample.range.getB() / (float)m_data->getFramesInBar(),
-		    Thread::MAIN);
+		c::channel::setChannelPlaybackMode(m_data.channelId, static_cast<PlaybackMode>(id));
+		updateInputStates();
 	};
 
-	m_pitchToSong->onClick = [this]()
+	m_time->setType(FL_FLOAT_INPUT);
+	m_time->setWhen(FL_WHEN_RELEASE | FL_WHEN_ENTER_KEY); // on focus lost or enter key
+	m_time->onChange = [this](const std::string& val)
 	{
-		c::channel::setChannelPitch(m_data->channelId, m_data->sample.range.getB() / (float)m_data->getFramesInLoop(),
-		    Thread::MAIN);
+		c::channel::setChannelTime(m_data.channelId, utils::string::toFloat(val));
 	};
 
-	m_pitchHalf->onClick = [this]()
-	{
-		c::channel::setChannelPitch(m_data->channelId, m_dial->value() / 2, Thread::MAIN);
-	};
-
-	m_pitchDouble->onClick = [this]()
-	{
-		c::channel::setChannelPitch(m_data->channelId, m_dial->value() * 2, Thread::MAIN);
-	};
-
-	m_pitchReset->onClick = [this]()
-	{
-		c::channel::setChannelPitch(m_data->channelId, G_DEFAULT_PITCH, Thread::MAIN);
-	};
-
-	rebuild(d);
+	rebuild();
 }
 
 /* -------------------------------------------------------------------------- */
 
-void gePitchTool::rebuild(const c::sampleEditor::Data& d)
+void gePitchTool::rebuild()
 {
-	m_data = &d;
-	update(m_data->sample.pitch, /*isDial=*/false);
+	m_playbackMode->showItem(static_cast<int>(m_data.getSample().playbackMode));
+	m_pitch->setValue(fmt::format("{:.4f}", m_data.getSample().pitch)); // 4 digits
+	m_time->setValue(fmt::format("{:.4f}", m_data.getSample().time));   // 4 digits
+	updateInputStates();
 }
 
 /* -------------------------------------------------------------------------- */
 
-void gePitchTool::update(float v, bool isDial)
+void gePitchTool::refresh()
 {
-	m_input->setValue(fmt::format("{:.4f}", v)); // 4 digits
-	if (!isDial)
-		m_dial->value(v);
+	m_pitch->setValue(fmt::format("{:.4f}", m_data.getSample().pitch)); // 4 digits
+	m_time->setValue(fmt::format("{:.4f}", m_data.getSample().time));   // 4 digits
+}
+
+/* -------------------------------------------------------------------------- */
+
+void gePitchTool::updateInputStates()
+{
+	const auto currentPlaybackMode = static_cast<PlaybackMode>(m_playbackMode->getSelectedId());
+	u::gui::setActive(m_time, currentPlaybackMode == PlaybackMode::ELASTIC);
+}
+
+/* -------------------------------------------------------------------------- */
+
+void gePitchTool::spreadSampleToLength(Frame length)
+{
+	const auto currentPlaybackMode = static_cast<PlaybackMode>(m_playbackMode->getSelectedId());
+	if (currentPlaybackMode == PlaybackMode::TAPE)
+	{
+		const float value = m_data.getSample().range.getLength() / static_cast<float>(length);
+		c::channel::setChannelPitch(m_data.channelId, value, Thread::MAIN);
+	}
+	else
+	{
+		const float value = length / static_cast<float>(m_data.getSample().range.getLength());
+		c::channel::setChannelTime(m_data.channelId, value);
+	}
 }
 
 } // namespace giada::v

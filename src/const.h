@@ -70,7 +70,7 @@ namespace giada
 
 /* -- version --------------------------------------------------------------- */
 constexpr auto    G_APP_NAME = "Giada";
-constexpr Version G_VERSION(1, 5, 0);
+constexpr Version G_VERSION(1, 6, 1);
 
 /* -- Internal channels ----------------------------------------------------- */
 constexpr ID MASTER_OUT_CHANNEL_ID = ID{1};
@@ -89,6 +89,9 @@ constexpr std::size_t G_INVALID_SCENE  = G_MAX_NUM_SCENES;
 constexpr Tick G_DEFAULT_ACTION_SIZE = G_PPQ / 4; // 1/16th note
 constexpr int  G_DEFAULT_BEATS       = 4;
 constexpr int  G_DEFAULT_BARS        = 1;
+
+/* -- Audio constants ------------------------------------------------------- */
+constexpr float G_SEMITONE_RATIO = 1.0594630943592953f; // 2^(1/12)
 } // namespace giada
 
 #endif

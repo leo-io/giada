@@ -408,12 +408,53 @@ float setChannelVolume(ID channelId, float v, Thread t, bool repaintMainUi)
 float setChannelPitch(ID channelId, float v, Thread t)
 {
 	g_engine->getChannelsApi().setPitch(channelId, v);
-	g_ui->pumpEvent([v]()
+	g_ui->pumpEvent([]()
 	{
 		if (auto* w = sampleEditor::getWindow(); w != nullptr)
-			w->pitchTool->update(v); });
+			w->refreshPitch(); });
 	notifyChannelForMidiIn(t, channelId);
 	return v;
+}
+
+/* -------------------------------------------------------------------------- */
+
+void increasePitchBySemitone(ID channelId)
+{
+	g_engine->getChannelsApi().increasePitchBySemitone(channelId);
+	g_ui->pumpEvent([]()
+	{
+		if (auto* w = sampleEditor::getWindow(); w != nullptr)
+			w->refreshPitch();
+	});
+}
+
+void decreasePitchBySemitone(ID channelId)
+{
+	g_engine->getChannelsApi().decreasePitchBySemitone(channelId);
+	g_ui->pumpEvent([]()
+	{
+		if (auto* w = sampleEditor::getWindow(); w != nullptr)
+			w->refreshPitch();
+	});
+}
+
+/* -------------------------------------------------------------------------- */
+
+void setChannelTime(ID channelId, float v)
+{
+	g_engine->getChannelsApi().setTime(channelId, v);
+	g_ui->pumpEvent([]()
+	{
+		if (auto* w = sampleEditor::getWindow(); w != nullptr)
+			w->refreshPitch();
+	});
+}
+
+/* -------------------------------------------------------------------------- */
+
+void setChannelPlaybackMode(ID channelId, PlaybackMode mode)
+{
+	g_engine->getChannelsApi().setPlaybackMode(channelId, mode);
 }
 
 /* -------------------------------------------------------------------------- */

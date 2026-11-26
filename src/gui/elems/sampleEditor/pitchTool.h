@@ -27,6 +27,7 @@
 #ifndef GE_PITCH_TOOL_H
 #define GE_PITCH_TOOL_H
 
+#include "src/aliases.h"
 #include "src/gui/elems/basics/flex.h"
 
 namespace giada::c::sampleEditor
@@ -38,28 +39,31 @@ namespace giada::v
 {
 class geInput;
 class geBox;
-class geDial;
+class geChoice;
 class geTextButton;
-class geImageButton;
 class gePitchTool : public geFlex
 {
 public:
 	gePitchTool(const c::sampleEditor::Data& d);
 
-	void rebuild(const c::sampleEditor::Data& d);
-	void update(float v, bool isDial = false);
+	void rebuild();
+	void refresh();
 
 private:
-	const c::sampleEditor::Data* m_data;
+	void updateInputStates();
+	void spreadSampleToLength(Frame length);
 
-	geBox*         m_label;
-	geDial*        m_dial;
-	geInput*       m_input;
-	geTextButton*  m_pitchToBar;
-	geTextButton*  m_pitchToSong;
-	geImageButton* m_pitchHalf;
-	geImageButton* m_pitchDouble;
-	geTextButton*  m_pitchReset;
+	const c::sampleEditor::Data& m_data;
+
+	geBox*    m_playbackModeLabel;
+	geChoice* m_playbackMode;
+
+	geBox*        m_pitchLabel;
+	geInput*      m_pitch;
+	geTextButton* m_adjust;
+
+	geBox*   m_timeLabel;
+	geInput* m_time;
 };
 } // namespace giada::v
 

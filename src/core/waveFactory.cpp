@@ -25,6 +25,7 @@
  * -------------------------------------------------------------------------- */
 
 #include "src/core/waveFactory.h"
+#include "audioFileIO.h"
 #include "src/core/const.h"
 #include "src/core/idManager.h"
 #include "src/core/patch.h"
@@ -37,7 +38,6 @@
 #include <fmt/core.h>
 #include <memory>
 #include <samplerate.h>
-#include <sndfile.h>
 
 namespace utils = mcl::utils;
 
@@ -46,27 +46,6 @@ namespace giada::m::waveFactory
 namespace
 {
 IdManager waveId_;
-
-/* -------------------------------------------------------------------------- */
-
-int getBits_(const SF_INFO& header)
-{
-	if (header.format & SF_FORMAT_PCM_S8)
-		return 8;
-	else if (header.format & SF_FORMAT_PCM_16)
-		return 16;
-	else if (header.format & SF_FORMAT_PCM_24)
-		return 24;
-	else if (header.format & SF_FORMAT_PCM_32)
-		return 32;
-	else if (header.format & SF_FORMAT_PCM_U8)
-		return 8;
-	else if (header.format & SF_FORMAT_FLOAT)
-		return 32;
-	else if (header.format & SF_FORMAT_DOUBLE)
-		return 64;
-	return 0;
-}
 
 /* -------------------------------------------------------------------------- */
 
@@ -120,41 +99,19 @@ void reset()
 
 Result createFromFile(const std::string& path, ID id, int samplerate, Resampler::Quality quality)
 {
-	if (path == "" || utils::fs::isDir(path))
-	{
-		u::log::print("[waveFactory::create] malformed path (was '{}')\n", path);
-		return {G_RES_ERR_NO_DATA};
-	}
+	auto result = audioFileIO::read(path);
+	if (!result)
+		return {.status = G_RES_ERR_IO};
 
-	if (path.size() > FILENAME_MAX)
-		return {G_RES_ERR_PATH_TOO_LONG};
-
-	SF_INFO  header;
-	SNDFILE* fileIn = sf_open(path.c_str(), SFM_READ, &header);
-
-	if (fileIn == nullptr)
-	{
-		u::log::print("[waveFactory::create] unable to read {}. {}\n", path, sf_strerror(fileIn));
-		return {G_RES_ERR_IO};
-	}
-
-	if (header.channels > G_MAX_IO_CHANS)
-	{
-		u::log::print("[waveFactory::create] unsupported multi-channel sample\n");
-		return {G_RES_ERR_WRONG_DATA};
-	}
+	const audioFileIO::Info info   = audioFileIO::getInfo(path);
+	mcl::AudioBuffer&       buffer = result.value();
 
 	waveId_.set(id);
 
-	std::unique_ptr<Wave> wave = std::make_unique<Wave>(waveId_.generate(id));
-	wave->alloc(header.frames, header.channels, header.samplerate, getBits_(header), path);
+	std::unique_ptr<Wave> wave = std::make_unique<Wave>(waveId_.generate(id), std::move(buffer),
+	    info.sampleRate, info.format, path);
 
-	if (sf_readf_float(fileIn, wave->getBuffer()[0], header.frames) != header.frames)
-		u::log::print("[waveFactory::create] warning: incomplete read!\n");
-
-	sf_close(fileIn);
-
-	if (header.channels == 1 && !wfx::monoToStereo(*wave))
+	if (wave->getBuffer().countChannels() == 1 && !wfx::monoToStereo(*wave))
 		return {G_RES_ERR_PROCESSING};
 
 	if (wave->getRate() != samplerate)
@@ -228,9 +185,9 @@ int resample(Wave& w, Resampler::Quality quality, int samplerate)
 	newData.alloc(newSizeFrames, w.getBuffer().countChannels());
 
 	SRC_DATA src_data;
-	src_data.data_in       = w.getBuffer()[0];
+	src_data.data_in       = w.getBuffer().getDataView().data();
 	src_data.input_frames  = w.getBuffer().countFrames();
-	src_data.data_out      = newData[0];
+	src_data.data_out      = newData.getDataView().data();
 	src_data.output_frames = newSizeFrames;
 	src_data.src_ratio     = ratio;
 
@@ -253,24 +210,6 @@ int resample(Wave& w, Resampler::Quality quality, int samplerate)
 
 int save(const Wave& w, const std::string& path)
 {
-	SF_INFO header;
-	header.samplerate = w.getRate();
-	header.channels   = w.getBuffer().countChannels();
-	header.format     = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
-
-	SNDFILE* file = sf_open(path.c_str(), SFM_WRITE, &header);
-	if (file == nullptr)
-	{
-		u::log::print("[waveFactory::save] unable to open {} for exporting: {}\n",
-		    path, sf_strerror(file));
-		return G_RES_ERR_IO;
-	}
-
-	if (sf_writef_float(file, w.getBuffer()[0], w.getBuffer().countFrames()) != w.getBuffer().countFrames())
-		u::log::print("[waveFactory::save] warning: incomplete write!\n");
-
-	sf_close(file);
-
-	return G_RES_OK;
+	return audioFileIO::write(path, w.getBuffer(), w.getRate());
 }
 } // namespace giada::m::waveFactory

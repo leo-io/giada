@@ -39,21 +39,19 @@ namespace giada::v
 {
 class geInput;
 class geBox;
-class geTextButton;
 class geShiftTool : public geFlex
 {
 public:
 	geShiftTool(const c::sampleEditor::Data& d);
 
-	void rebuild(const c::sampleEditor::Data& d);
+	void rebuild();
 	void update(Frame shift);
 
 private:
-	const c::sampleEditor::Data* m_data;
+	const c::sampleEditor::Data& m_data;
 
-	geBox*        m_label;
-	geInput*      m_shift;
-	geTextButton* m_reset;
+	geBox*   m_label;
+	geInput* m_shift;
 };
 } // namespace giada::v
 

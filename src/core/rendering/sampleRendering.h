@@ -41,6 +41,7 @@ namespace giada::m
 class Channel;
 class Wave;
 class Resampler;
+class Stretcher;
 class PluginHost;
 } // namespace giada::m
 
@@ -71,11 +72,16 @@ struct RenderInfo
 A ReadResult object is returned by the readWave() function below, containing the
 number of frames used and generated from a buffer filling operation. The two
 values are different only when pitch is != 1.0, where a chunk of audio in input
-(used) might result in a longer or shorter portion of audio in output (generated). */
+(used) might result in a longer or shorter portion of audio in output (generated).
+'finished', used only by the Stretcher class, determines whether the stretch
+process has really ended or not - a stretch operation might take more than one
+callback, especially if the stretching factor is high. */
 
 struct ReadResult
 {
-	Frame used, generated;
+	Frame used      = 0;
+	Frame generated = 0;
+	bool  finished  = false;
 };
 
 void renderSampleChannel(const Channel&, Scene, bool seqIsRunning);
@@ -85,7 +91,7 @@ Copies input buffer to channel buffer: this enables the input monitoring. */
 
 void renderSampleChannelInput(const Channel&, const mcl::AudioBuffer&);
 
-ReadResult readWave(const Wave&, mcl::AudioBuffer&, Frame start, Frame max, Frame offset, float pitch, const Resampler&);
+ReadResult readWave(const Sample&, mcl::AudioBuffer&, Frame start, Frame offset, const Resampler&, Stretcher&);
 } // namespace giada::m::rendering
 
 #endif
